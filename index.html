@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Face Mask Detection</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:       #0a0c10;
+    --surface:  #111318;
+    --card:     #161a22;
+    --border:   #232835;
+    --accent:   #00e5a0;
+    --accent2:  #0055ff;
+    --danger:   #ff3c3c;
+    --text:     #e8eaf0;
+    --title:    #6af3ff;
+    --muted:    #606880;
+    --mono:     'Space Mono', monospace;
+    --sans:     'DM Sans', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; overflow-x: hidden; }
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,160,.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,160,.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none; z-index: 0;
+  }
+
+  /* ── Header ── */
+  header {
+    position: relative; z-index: 10;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1rem 2.5rem;
+    border-bottom: 1px solid rgba(0,229,160,.12);
+    background: linear-gradient(135deg, #04060f 0%, #080d1c 35%, #060b19 65%, #04060f 100%);
+    backdrop-filter: blur(20px);
+    box-shadow: 0 4px 40px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.04);
+    overflow: hidden;
+  }
+
+  /* Moving shimmer line at bottom of header */
+  header::after {
+    content: '';
+    position: absolute; bottom: 0; left: 0;
+    height: 2px; width: 100%;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      transparent 15%,
+      var(--accent) 35%,
+      #7c3aed 50%,
+      var(--accent2) 65%,
+      transparent 85%,
+      transparent 100%);
+    background-size: 200% 100%;
+    animation: headerShimmer 4s ease-in-out infinite;
+  }
+  @keyframes headerShimmer {
+    0%   { background-position: 150% 0; opacity: .6; }
+    50%  { opacity: 1; }
+    100% { background-position: -150% 0; opacity: .6; }
+  }
+
+  /* Subtle animated bg glow inside header */
+  header::before {
+    content: '';
+    position: absolute; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(ellipse 400px 120px at 50% 50%, rgba(0,229,160,.04) 0%, transparent 70%),
+      radial-gradient(ellipse 300px 80px at 20% 50%,  rgba(0,85,255,.05)  0%, transparent 70%);
+    animation: headerGlow 6s ease-in-out infinite alternate;
+  }
+  @keyframes headerGlow {
+    0%   { opacity: .6; }
+    100% { opacity: 1; }
+  }
+
+  /* ── Logo ── */
+  .logo {
+    display: flex; align-items: center;
+    margin-left: 565px; gap: .85rem;
+    font-family: var(--mono); font-weight: 700;
+    font-size: 1.1rem; letter-spacing: .08em;
+    position: relative; z-index: 1;
+  }
+
+  /* Spinning conic-gradient border on the icon */
+  @property --a { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+  .logo-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem; position: relative; z-index: 0;
+    background: #080d1c;
+    animation: iconGlow 3s ease-in-out infinite;
+  }
+  .logo-icon::before {
+    content: '';
+    position: absolute; inset: -2px; border-radius: 12px; z-index: -1;
+    background: conic-gradient(from var(--a), #00e5a0, #0055ff, #a855f7, #00e5a0);
+    animation: rotateBorder 3s linear infinite;
+  }
+  .logo-icon::after {
+    content: ''; position: absolute; inset: 2px;
+    border-radius: 8px; z-index: -1; background: #080d1c;
+  }
+  @keyframes rotateBorder { to { --a: 360deg; } }
+  @keyframes iconGlow {
+    0%,100% { box-shadow: 0 0 10px rgba(0,229,160,.2), 0 0 30px rgba(0,229,160,.1); }
+    50%     { box-shadow: 0 0 20px rgba(0,229,160,.4), 0 0 50px rgba(0,85,255,.2); }
+  }
+
+  /* Shimmer sweep across the text */
+  .logo-text {
+    position: relative;
+    background: linear-gradient(90deg,
+      #6af3ff 0%, #00e5a0 20%, #ffffff 40%,
+      #00e5a0 60%, #0099ff 80%, #6af3ff 100%);
+    background-size: 250% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: textSweep 4s linear infinite;
+  }
+  @keyframes textSweep {
+    0%   { background-position: 250% center; }
+    100% { background-position: -250% center; }
+  }
+
+  .status-pill {
+    display: flex; align-items: center; gap: .5rem;
+    padding: .35rem .85rem; border-radius: 999px;
+    border: 1px solid rgba(0,229,160,.2);
+    font-size: .78rem; font-family: var(--mono); color: var(--accent);
+    background: rgba(0,229,160,.05);
+    position: relative; z-index: 1;
+  }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;box-shadow:0 0 6px var(--accent)} 50%{opacity:.4;box-shadow:none} }
+
+  /* ── Rest of layout (unchanged) ── */
+  main {
+    position: relative; z-index: 1;
+    max-width: 1300px; margin: 0 auto;
+    padding: 2rem 2.5rem;
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    grid-template-rows: auto 1fr;
+    gap: 1.5rem;
+  }
+  .tabs { grid-column: 1 / -1; display: flex; gap: .5rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem; }
+  .tab-btn { background: transparent; border: 1px solid var(--border); color: var(--muted); font-family: var(--mono); font-size: .82rem; padding: .5rem 1.25rem; border-radius: 6px; cursor: pointer; transition: all .2s; }
+  .tab-btn.active, .tab-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(0,229,160,.07); }
+
+
+  /* ── Card animated glow outline ── */
+  @property --ca { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 4px 24px rgba(0,0,0,.35);
+    transition: box-shadow .3s;
+  }
+
+  /* Glow ring sits outside the card using outline trick */
+  .card::before {
+    content: '';
+    position: absolute; inset: -1px;
+    border-radius: 15px; z-index: 0; pointer-events: none;
+    background: conic-gradient(from var(--ca),
+      transparent  0deg,
+      transparent  55deg,
+      rgba(0,229,160,.7)  110deg,
+      rgba(0,85,255,.5)   165deg,
+      rgba(124,58,237,.6) 220deg,
+      rgba(0,229,160,.3)  275deg,
+      transparent  330deg,
+      transparent  360deg);
+    animation: cardSpin 7s linear infinite;
+    opacity: 0;
+    transition: opacity .4s;
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    padding: 1.5px;
+  }
+
+  .card:hover::before { opacity: 1; }
+
+  @keyframes cardSpin { to { --ca: 360deg; } }
+
+  /* Always-on subtle version (not hover-only) */
+  .card::after {
+    content: '';
+    position: absolute; inset: -1px;
+    border-radius: 15px; z-index: 0; pointer-events: none;
+    background: conic-gradient(from var(--ca),
+      transparent  0deg,
+      rgba(0,229,160,.18) 90deg,
+      rgba(0,85,255,.15)  180deg,
+      rgba(124,58,237,.18) 270deg,
+      transparent  360deg);
+    animation: cardSpin 7s linear infinite;
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    padding: 1.5px;
+  }
+
+  .card:hover {
+    box-shadow: 0 6px 32px rgba(0,0,0,.5), 0 0 50px rgba(0,229,160,.07);
+  }
+
+  .card-header { padding: 1rem 1.4rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .card-title { font-family: var(--mono); font-size: .82rem; letter-spacing: .06em; color: var(--title); text-transform: uppercase; }
+  .card-body { padding: 1.4rem; }
+
+  .preview-wrap {
+    position: relative; background: #080a0e; border-radius: 8px; overflow: hidden;
+    min-height: 360px; display: flex; align-items: center; justify-content: center;
+  }
+  .preview-wrap img { max-width: 100%; max-height: 480px; display: block; }
+
+  #webcam-video  { display: none !important; }
+  #webcam-canvas { display: block; max-width: 100%; max-height: 480px; }
+
+  .placeholder-msg { text-align: center; color: var(--muted); font-family: var(--mono); font-size: .85rem; line-height: 2; }
+  .placeholder-icon { font-size: 2.5rem; margin-bottom: .5rem; }
+
+  .upload-zone { border: 2px dashed var(--border); border-radius: 10px; padding: 2.5rem 1.5rem; text-align: center; cursor: pointer; transition: all .2s; }
+  .upload-zone:hover, .upload-zone.drag-over { border-color: var(--accent); background: rgba(0,229,160,.04); }
+  .upload-zone input { display: none; }
+  .upload-label { font-size: .9rem; color: var(--muted); font-family: var(--mono); }
+  .upload-label span { color: var(--accent); }
+
+  .btn { display: inline-flex; align-items: center; gap: .5rem; padding: .6rem 1.3rem; border-radius: 7px; border: none; cursor: pointer; font-family: var(--mono); font-size: .82rem; font-weight: 700; letter-spacing: .04em; transition: all .2s; }
+  .btn-primary { background: var(--accent); color: #000; }
+  .btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+  .btn-danger  { background: var(--danger); color: #fff; }
+  .btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  .stat-row { display: flex; align-items: center; justify-content: space-between; padding: .85rem 0; border-bottom: 1px solid var(--border); }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { display: flex; align-items: center; gap: .6rem; font-size: .88rem; color: var(--text); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot-green { background: var(--accent); }
+  .dot-red   { background: var(--danger); }
+  .dot-blue  { background: var(--accent2); }
+  .stat-value { font-family: var(--mono); font-size: 1.1rem; font-weight: 700; }
+
+  .bar-wrap { margin-top: 1rem; }
+  .bar-item { margin-bottom: .9rem; }
+  .bar-meta { display: flex; justify-content: space-between; font-size: .78rem; color: var(--muted); margin-bottom: .3rem; }
+  .bar-track { height: 7px; background: var(--border); border-radius: 99px; overflow: hidden; }
+  .bar-fill  { height: 100%; border-radius: 99px; transition: width .6s cubic-bezier(.4,0,.2,1); }
+  .bar-green { background: linear-gradient(90deg, var(--accent), #00b37a); }
+  .bar-red   { background: linear-gradient(90deg, var(--danger), #cc0000); }
+
+  .det-list { max-height: 220px; overflow-y: auto; }
+  .det-item { display: flex; align-items: center; justify-content: space-between; padding: .6rem .75rem; border-radius: 6px; margin-bottom: .4rem; background: var(--surface); font-size: .82rem; animation: fadeIn .3s ease; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
+  .det-badge { padding: .2rem .65rem; border-radius: 4px; font-family: var(--mono); font-size: .75rem; font-weight: 700; }
+  .badge-green { background: rgba(0,229,160,.15); color: var(--accent); }
+  .badge-red   { background: rgba(255,60,60,.15);  color: var(--danger); }
+
+  .spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; margin: 1rem auto; display: none; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: contents; }
+
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: var(--surface); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+  @media(max-width:900px) { main { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🎭</div>
+    <span class="logo-text">FACE MASK DETECTION</span>
+  </div>
+  <div class="status-pill">
+    <div class="status-dot"></div>
+    System Ready
+  </div>
+</header>
+
+<main>
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('image', this)">📷 Image Upload</button>
+    <button class="tab-btn"        onclick="switchTab('webcam', this)">🎥 Live Webcam</button>
+    <a href="/analytics" style="margin-left:auto;display:inline-flex;align-items:center;gap:.5rem;padding:.5rem 1.1rem;border-radius:6px;border:1px solid var(--accent2);color:var(--accent2);background:rgba(0,85,255,.07);font-family:var(--mono);font-size:.82rem;font-weight:700;text-decoration:none;transition:all .2s;" onmouseover="this.style.background='rgba(0,85,255,.15)'" onmouseout="this.style.background='rgba(0,85,255,.07)'">📊 Analytics Dashboard</a>
+  </div>
+
+  <!-- IMAGE TAB -->
+  <div id="tab-image" class="tab-panel active">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Detection Preview</span>
+        <button class="btn btn-outline" onclick="clearResults()" style="padding:.35rem .8rem;font-size:.75rem">Clear</button>
+      </div>
+      <div class="card-body">
+        <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+          <div class="placeholder-icon">📁</div>
+          <div class="upload-label">Drop an image here or <span>click to browse</span></div>
+          <div style="font-size:.75rem;color:var(--muted);margin-top:.4rem">JPG · PNG · BMP · WEBP</div>
+          <input type="file" id="file-input" accept="image/*" onchange="handleFile(this.files[0])"/>
+        </div>
+        <div class="preview-wrap" id="preview-wrap" style="display:none;margin-top:1rem">
+          <img id="result-img" src="" alt="Result"/>
+        </div>
+        <div class="spinner" id="spinner"></div>
+        <div style="margin-top:1rem;display:none" id="action-btns">
+          <button class="btn btn-primary" id="detect-btn" onclick="runDetection()" disabled>⚡ Detect Masks</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WEBCAM TAB -->
+  <div id="tab-webcam" class="tab-panel">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Live Feed</span>
+        <div style="display:flex;gap:.5rem">
+          <button class="btn btn-primary" id="start-btn" onclick="startWebcam()">▶ Start</button>
+          <button class="btn btn-danger"  id="stop-btn"  onclick="stopWebcam()" disabled>■ Stop</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <video id="webcam-video" autoplay playsinline muted></video>
+        <div class="preview-wrap" id="webcam-preview">
+          <div class="placeholder-msg" id="webcam-placeholder">
+            <div class="placeholder-icon">🎥</div>
+            Click <b>Start</b> to begin live detection
+          </div>
+          <canvas id="webcam-canvas" style="display:none;"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SIDEBAR -->
+  <div style="display:flex;flex-direction:column;gap:1.5rem">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Detection Stats</span>
+        <button class="btn btn-outline" onclick="resetStats()" style="padding:.3rem .7rem;font-size:.72rem">Reset</button>
+      </div>
+      <div class="card-body" style="padding:1rem 1.4rem">
+        <div class="stat-row">
+          <span class="stat-label"><span class="dot dot-blue"></span>Faces Detected</span>
+          <span class="stat-value" id="stat-total">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label"><span class="dot dot-green"></span>With Mask</span>
+          <span class="stat-value" id="stat-mask" style="color:var(--accent)">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label"><span class="dot dot-red"></span>No Mask</span>
+          <span class="stat-value" id="stat-nomask" style="color:var(--danger)">0</span>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-item">
+            <div class="bar-meta"><span>Mask compliance</span><span id="mask-pct">0%</span></div>
+            <div class="bar-track"><div class="bar-fill bar-green" id="bar-mask" style="width:0%"></div></div>
+          </div>
+          <div class="bar-item">
+            <div class="bar-meta"><span>No mask rate</span><span id="nomask-pct">0%</span></div>
+            <div class="bar-track"><div class="bar-fill bar-red" id="bar-nomask" style="width:0%"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="flex:1">
+      <div class="card-header"><span class="card-title">Detection Log</span></div>
+      <div class="card-body" style="padding:.75rem 1rem">
+        <div class="det-list" id="det-list">
+          <div data-empty style="color:var(--muted);font-size:.82rem;font-family:var(--mono);text-align:center;padding:1rem">No detections yet</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+let currentFile    = null;
+let webcamStream   = null;
+let webcamInterval = null;
+let isProcessing   = false;
+
+let imgMask = 0, imgNoMask = 0;
+let camMask = 0, camNoMask = 0;
+let isWebcamMode = false;
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name !== 'webcam') stopWebcam();
+}
+
+const dropZone = document.getElementById('drop-zone');
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); handleFile(e.dataTransfer.files[0]); });
+
+function handleFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  currentFile = file;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('result-img').src = e.target.result;
+    document.getElementById('preview-wrap').style.display = 'flex';
+    document.getElementById('drop-zone').style.display    = 'none';
+    document.getElementById('detect-btn').disabled        = false;
+    document.getElementById('action-btns').style.display  = 'flex';
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearResults() {
+  currentFile = null;
+  document.getElementById('result-img').src             = '';
+  document.getElementById('preview-wrap').style.display = 'none';
+  document.getElementById('drop-zone').style.display    = 'block';
+  document.getElementById('detect-btn').disabled        = true;
+  document.getElementById('action-btns').style.display  = 'none';
+}
+
+async function runDetection() {
+  if (!currentFile) return;
+  const spinner = document.getElementById('spinner');
+  const btn     = document.getElementById('detect-btn');
+  spinner.style.display = 'block';
+  btn.disabled = true;
+  const form = new FormData();
+  form.append('file', currentFile);
+  try {
+    const res  = await fetch('/api/detect/image', { method:'POST', body:form });
+    const data = await res.json();
+    if (data.error) { alert(data.error); return; }
+    document.getElementById('result-img').src = 'data:image/jpeg;base64,' + data.image;
+    imgMask   += data.mask_count;
+    imgNoMask += data.no_mask_count;
+    updateStats();
+    addToLog(data.results);
+  } catch(e) {
+    alert('Error connecting to server. Make sure python src/app.py is running.');
+  } finally {
+    spinner.style.display = 'none';
+    btn.disabled = false;
+  }
+}
+
+let lastBoxes     = [];   // target boxes from server
+let currentBoxes  = [];   // interpolated boxes drawn each frame
+let rafId         = null;
+let sendTimer     = null;
+let offscreenCanvas = null;  // reuse single offscreen canvas
+
+async function startWebcam() {
+  isWebcamMode = true;
+  camMask = 0; camNoMask = 0; lastBoxes = []; currentBoxes = [];
+  updateStats();
+  try {
+    webcamStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    const video = document.getElementById('webcam-video');
+    video.srcObject = webcamStream;
+    video.onloadedmetadata = () => {
+      video.play();
+      const canvas      = document.getElementById('webcam-canvas');
+      const placeholder = document.getElementById('webcam-placeholder');
+      canvas.width  = video.videoWidth  || 640;
+      canvas.height = video.videoHeight || 480;
+
+      // Create single reusable offscreen canvas
+      offscreenCanvas = document.createElement('canvas');
+      offscreenCanvas.width  = canvas.width;
+      offscreenCanvas.height = canvas.height;
+
+      if (placeholder) placeholder.style.display = 'none';
+      canvas.style.display = 'block';
+      document.getElementById('start-btn').disabled = true;
+      document.getElementById('stop-btn').disabled  = false;
+      const ctx = canvas.getContext('2d');
+      function renderLoop() {
+        if (!webcamStream) return;
+        if (video.readyState >= 2) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          interpolateBoxes();   // smoothly move currentBoxes toward lastBoxes
+          drawBoxes(ctx);       // draw currentBoxes (not lastBoxes directly)
+        }
+        rafId = requestAnimationFrame(renderLoop);
+      }
+      renderLoop();
+      sendTimer = setInterval(() => sendFrameToServer(video, canvas), 50);  
+    };
+  } catch(e) {
+    alert('Camera access denied or unavailable: ' + e.message);
+  }
+}
+
+// Smoothly move currentBoxes toward lastBoxes every frame
+// LERP factor: 0.35 = snappy but smooth (higher = faster, lower = more glide)
+const LERP = 0.35;
+function interpolateBoxes() {
+  if (!lastBoxes.length) { currentBoxes = []; return; }
+
+  // If count changed, snap immediately (new face appeared or disappeared)
+  if (currentBoxes.length !== lastBoxes.length) {
+    currentBoxes = lastBoxes.map(r => ({ ...r, box: [...r.box] }));
+    return;
+  }
+
+  // Interpolate each box coordinate toward the server target
+  currentBoxes = lastBoxes.map((target, i) => {
+    const cur = currentBoxes[i] || { ...target, box: [...target.box] };
+    return {
+      ...target,
+      box: target.box.map((val, j) => cur.box[j] + (val - cur.box[j]) * LERP)
+    };
+  });
+}
+
+function drawBoxes(ctx) {
+  currentBoxes.forEach(r => {
+    const [sX, sY, eX, eY] = r.box;
+    const isMask = r.label === 'Mask';
+    const color  = isMask ? '#00e5a0' : '#ff3c3c';
+    const glow   = isMask ? 'rgba(0,229,160,.5)' : 'rgba(255,60,60,.5)';
+    const label  = `${r.label}: ${Math.max(r.mask_prob, r.no_mask_prob).toFixed(1)}%`;
+    const bw = eX - sX, bh = eY - sY;
+
+    // Glow
+    ctx.shadowColor = glow; ctx.shadowBlur = 14;
+    ctx.strokeStyle = color; ctx.lineWidth = 2.5;
+    ctx.strokeRect(sX, sY, bw, bh);
+    ctx.shadowBlur = 0;
+
+    // Corner marks
+    const cs = 14;
+    ctx.lineWidth = 3;
+    [[sX,sY,1,1],[eX,sY,-1,1],[sX,eY,1,-1],[eX,eY,-1,-1]].forEach(([x,y,dx,dy]) => {
+      ctx.beginPath(); ctx.moveTo(x+dx*cs,y); ctx.lineTo(x,y); ctx.lineTo(x,y+dy*cs); ctx.stroke();
+    });
+
+    // Label pill
+    ctx.font = 'bold 12px Space Mono, monospace';
+    const tw = ctx.measureText(label).width;
+    const pw = tw + 16, ph = 22, py = Math.max(0, sY - ph - 3);
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.roundRect(sX, py, pw, ph, 4); ctx.fill();
+    ctx.fillStyle = isMask ? '#000' : '#fff';
+    ctx.fillText(label, sX + 8, py + 14);
+  });
+}
+
+async function sendFrameToServer(video, canvas) {
+  if (isProcessing || video.readyState < 2) return;
+  isProcessing = true;
+
+  // Reuse the single offscreen canvas — no GC pressure from creating new ones
+  if (offscreenCanvas) {
+    offscreenCanvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+  }
+  const frameData = (offscreenCanvas || canvas).toDataURL('image/jpeg', 0.65);
+  try {
+    const res  = await fetch('/api/webcam/frame', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ frame: frameData })
+    });
+    const data = await res.json();
+    if (data.results !== undefined) {
+      lastBoxes = data.results;   // interpolation will glide currentBoxes toward these
+      camMask   = data.results.filter(r => r.label === 'Mask').length;
+      camNoMask = data.results.filter(r => r.label === 'No Mask').length;
+      updateStats();
+      if (data.results.length > 0) addToLog(data.results);
+    }
+  } catch(e) {}
+  finally { isProcessing = false; }
+}
+
+function stopWebcam() {
+  isWebcamMode = false; camMask = 0; camNoMask = 0;
+  lastBoxes = []; currentBoxes = []; offscreenCanvas = null;
+  if (rafId)     { cancelAnimationFrame(rafId); rafId = null; }
+  if (sendTimer) { clearInterval(sendTimer);    sendTimer = null; }
+  clearInterval(webcamInterval); webcamInterval = null;
+  if (webcamStream) { webcamStream.getTracks().forEach(t => t.stop()); webcamStream = null; }
+  const canvas = document.getElementById('webcam-canvas');
+  const ph     = document.getElementById('webcam-placeholder');
+  canvas.style.display = 'none';
+  if (ph) ph.style.display = 'flex';
+  document.getElementById('start-btn').disabled = false;
+  document.getElementById('stop-btn').disabled  = true;
+  canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function updateStats() {
+  const m  = isWebcamMode ? camMask   : imgMask;
+  const nm = isWebcamMode ? camNoMask : imgNoMask;
+  const total = m + nm;
+  document.getElementById('stat-total').textContent  = total;
+  document.getElementById('stat-mask').textContent   = m;
+  document.getElementById('stat-nomask').textContent = nm;
+  const mp = total ? Math.round(m  / total * 100) : 0;
+  const np = total ? Math.round(nm / total * 100) : 0;
+  document.getElementById('mask-pct').textContent   = mp + '%';
+  document.getElementById('nomask-pct').textContent = np + '%';
+  document.getElementById('bar-mask').style.width   = mp + '%';
+  document.getElementById('bar-nomask').style.width = np + '%';
+}
+
+function addToLog(results) {
+  const list = document.getElementById('det-list');
+  if (list.querySelector('[data-empty]')) list.innerHTML = '';
+  results.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'det-item';
+    div.innerHTML = `
+      <span style="color:var(--muted);font-family:var(--mono);font-size:.75rem">Face</span>
+      <span style="font-size:.82rem">${r.mask_prob}% / ${r.no_mask_prob}%</span>
+      <span class="det-badge ${r.label==='Mask'?'badge-green':'badge-red'}">${r.label}</span>
+    `;
+    list.prepend(div);
+  });
+  while (list.children.length > 30) list.removeChild(list.lastChild);
+}
+
+function resetStats() {
+  imgMask = imgNoMask = camMask = camNoMask = 0;
+  updateStats();
+  document.getElementById('det-list').innerHTML =
+    '<div data-empty style="color:var(--muted);font-size:.82rem;font-family:var(--mono);text-align:center;padding:1rem">No detections yet</div>';
+  fetch('/api/stats/reset', { method: 'POST' }).catch(() => {});
+}
+</script>
+</body>
+</html>

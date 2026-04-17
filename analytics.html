@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Compliance Analytics – Face Mask Detection</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:#0a0c10; --surface:#111318; --card:#161a22; --card2:#1a1f2e;
+  --border:#232835; --border2:rgba(255,255,255,.1);
+  --accent:#00e5a0; --accent2:#0055ff; --danger:#ff3c3c; --warn:#f59e0b;
+  --purple:#a855f7; --text:#e8eaf0; --title:#6af3ff; --muted:#606880;
+  --mono:'Space Mono',monospace; --sans:'DM Sans',sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;font-size:14px}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:linear-gradient(rgba(0,229,160,.025)1px,transparent 1px),
+  linear-gradient(90deg,rgba(0,229,160,.025)1px,transparent 1px);
+  background-size:44px 44px}
+
+/* ── Header ── */
+header{position:sticky;top:0;z-index:100;display:flex;align-items:center;
+  justify-content:space-between;padding:.9rem 2.5rem;
+  border-bottom:1px solid rgba(0,229,160,.1);
+  background:rgba(7,8,16,.92);backdrop-filter:blur(24px) saturate(180%);
+  box-shadow:0 2px 40px rgba(0,0,0,.6);overflow:hidden}
+header::after{content:'';position:absolute;bottom:0;left:0;height:2px;width:100%;
+  background:linear-gradient(90deg,transparent 10%,var(--accent) 32%,#7c3aed 50%,var(--accent2) 68%,transparent 90%);
+  background-size:200% 100%;animation:shimmer 4s ease-in-out infinite}
+@keyframes shimmer{0%{background-position:150% 0;opacity:.5}50%{opacity:1}100%{background-position:-150% 0;opacity:.5}}
+
+@property --a{syntax:'<angle>';initial-value:0deg;inherits:false}
+.logo{display:flex;align-items:center;gap:.85rem;font-family:var(--mono);
+  font-weight:700;font-size:1rem;letter-spacing:.08em;position:relative;z-index:1}
+.logo-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;
+  justify-content:center;font-size:1.15rem;position:relative;z-index:0;background:#080d1c;
+  animation:iconGlow 3s ease-in-out infinite}
+.logo-icon::before{content:'';position:absolute;inset:-2px;border-radius:12px;z-index:-1;
+  background:conic-gradient(from var(--a),#00e5a0,#0055ff,#a855f7,#00e5a0);
+  animation:rotateBorder 3s linear infinite}
+.logo-icon::after{content:'';position:absolute;inset:2px;border-radius:8px;z-index:-1;background:#080d1c}
+@keyframes rotateBorder{to{--a:360deg}}
+@keyframes iconGlow{0%,100%{box-shadow:0 0 12px rgba(0,229,160,.2)}50%{box-shadow:0 0 28px rgba(0,229,160,.5),0 0 50px rgba(0,85,255,.15)}}
+.logo-text{background:linear-gradient(90deg,#6af3ff 0%,#00e5a0 20%,#fff 40%,#00e5a0 60%,#0099ff 80%,#6af3ff 100%);
+  background-size:250% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;animation:textSweep 4s linear infinite}
+@keyframes textSweep{0%{background-position:250% center}100%{background-position:-250% center}}
+
+.header-right{display:flex;align-items:center;gap:.75rem;position:relative;z-index:1}
+.back-btn{display:flex;align-items:center;gap:.45rem;padding:.38rem .9rem;border-radius:7px;
+  border:1px solid var(--border2);background:rgba(255,255,255,.04);color:var(--muted);
+  font-family:var(--mono);font-size:.75rem;text-decoration:none;transition:all .2s}
+.back-btn:hover{border-color:var(--accent);color:var(--accent);background:rgba(0,229,160,.06)}
+.live-badge{display:flex;align-items:center;gap:.45rem;padding:.38rem .85rem;
+  border-radius:999px;border:1px solid rgba(0,229,160,.25);font-size:.75rem;
+  font-family:var(--mono);color:var(--accent);background:rgba(0,229,160,.06)}
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:livePulse 1.4s infinite}
+@keyframes livePulse{0%,100%{opacity:1;box-shadow:0 0 8px var(--accent)}50%{opacity:.35;box-shadow:none}}
+
+/* ── Page layout ── */
+.page{position:relative;z-index:1;max-width:1380px;margin:0 auto;
+  padding:1.75rem 2.5rem;display:flex;flex-direction:column;gap:1.5rem}
+
+/* ── Page title ── */
+.page-title{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:1rem}
+.page-title-left h1{font-family:var(--mono);font-size:1.1rem;color:var(--title);
+  letter-spacing:.07em;margin-bottom:.35rem}
+.page-title-left p{font-size:.82rem;color:var(--muted);line-height:1.7;max-width:520px}
+.ctrl-row{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-top:.25rem}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:.45rem;padding:.48rem 1.15rem;
+  border-radius:8px;border:none;cursor:pointer;font-family:var(--mono);
+  font-size:.78rem;font-weight:700;letter-spacing:.03em;transition:all .2s;text-decoration:none;white-space:nowrap}
+.btn-green{background:var(--accent);color:#000;box-shadow:0 2px 14px rgba(0,229,160,.25)}
+.btn-green:hover{filter:brightness(1.1);transform:translateY(-1px);box-shadow:0 4px 20px rgba(0,229,160,.4)}
+.btn-outline{background:transparent;color:var(--text);border:1px solid var(--border2)}
+.btn-outline:hover{border-color:var(--accent);color:var(--accent);background:rgba(0,229,160,.05)}
+.btn-red{background:rgba(255,60,60,.1);color:var(--danger);border:1px solid rgba(255,60,60,.2)}
+.btn-red:hover{background:rgba(255,60,60,.2)}
+
+/* ── KPI Grid ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:.9rem}
+@media(max-width:1200px){.kpi-grid{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:700px){.kpi-grid{grid-template-columns:repeat(2,1fr)}}
+
+.kpi-card{
+  background:var(--card);border:1px solid var(--border);border-radius:14px;
+  padding:1.1rem 1.2rem;position:relative;overflow:hidden;
+  transition:border-color .25s,box-shadow .25s,transform .2s;
+  cursor:default;
+}
+.kpi-card::before{
+  content:'';position:absolute;inset:-1px;border-radius:15px;z-index:0;pointer-events:none;
+  background:conic-gradient(from var(--a),transparent 55deg,rgba(0,229,160,.35) 110deg,
+    rgba(0,85,255,.25) 165deg,rgba(168,85,247,.3) 220deg,transparent 330deg);
+  animation:cardSpin 8s linear infinite;
+  -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;padding:1.5px;opacity:.5;
+  transition:opacity .3s;
+}
+.kpi-card:hover::before{opacity:1}
+.kpi-card:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,.4),0 0 40px rgba(0,229,160,.06)}
+@keyframes cardSpin{to{--a:360deg}}
+
+.kpi-glow{position:absolute;top:-24px;right:-24px;width:90px;height:90px;
+  border-radius:50%;filter:blur(32px);opacity:.18;pointer-events:none;z-index:0}
+.kpi-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.09em;
+  color:var(--muted);margin-bottom:.45rem;font-family:var(--mono);position:relative;z-index:1}
+.kpi-value{font-family:var(--mono);font-size:1.85rem;font-weight:700;
+  line-height:1;position:relative;z-index:1}
+.kpi-sub{font-size:.68rem;color:var(--muted);margin-top:.35rem;position:relative;z-index:1}
+.c-green{color:var(--accent)} .c-red{color:var(--danger)}
+.c-blue{color:#5aafff} .c-warn{color:var(--warn)} .c-white{color:var(--text)}
+
+/* ── Chart section ── */
+.chart-grid{display:grid;grid-template-columns:3fr 2fr;gap:1.1rem}
+@media(max-width:900px){.chart-grid{grid-template-columns:1fr}}
+
+/* ── Cards ── */
+.card{
+  background:var(--card);border:1px solid var(--border);border-radius:16px;
+  overflow:hidden;position:relative;
+  box-shadow:0 2px 20px rgba(0,0,0,.3);
+  transition:border-color .2s,box-shadow .2s;
+}
+.card::after{
+  content:'';position:absolute;inset:-1px;border-radius:17px;z-index:0;pointer-events:none;
+  background:conic-gradient(from var(--a),transparent 55deg,rgba(0,229,160,.2) 120deg,
+    rgba(0,85,255,.15) 180deg,rgba(168,85,247,.2) 240deg,transparent 330deg);
+  animation:cardSpin 8s linear infinite;
+  -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;padding:1px;
+}
+.card:hover{border-color:rgba(0,229,160,.2);box-shadow:0 6px 32px rgba(0,0,0,.45),0 0 40px rgba(0,229,160,.05)}
+.card-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:.85rem 1.2rem;border-bottom:1px solid var(--border);
+  position:relative;z-index:1;
+  background:linear-gradient(90deg,rgba(255,255,255,.02) 0%,transparent 100%);
+}
+.card-title{
+  display:flex;align-items:center;gap:.6rem;
+  font-family:var(--mono);font-size:.75rem;letter-spacing:.07em;
+  color:var(--title);text-transform:uppercase;font-weight:700;
+}
+.card-title-icon{font-size:.95rem}
+.card-body{padding:1.15rem;position:relative;z-index:1}
+
+/* Chart wrapper */
+.chart-wrap{position:relative;height:280px}
+.chart-sub{font-size:.72rem;color:var(--muted);font-family:var(--mono);
+  text-align:center;margin-top:.5rem}
+
+/* ── Log table ── */
+.log-scroll{max-height:340px;overflow-y:auto}
+.log-scroll::-webkit-scrollbar{width:4px}
+.log-scroll::-webkit-scrollbar-track{background:transparent}
+.log-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
+
+.log-table{width:100%;border-collapse:collapse}
+.log-table th{
+  text-align:left;padding:.55rem 1rem;font-family:var(--mono);font-size:.67rem;
+  text-transform:uppercase;letter-spacing:.07em;color:var(--muted);
+  border-bottom:1px solid var(--border);position:sticky;top:0;
+  background:var(--card);z-index:2;
+}
+.log-table td{
+  padding:.6rem 1rem;border-bottom:1px solid rgba(35,40,53,.4);
+  font-family:var(--mono);font-size:.75rem;transition:background .15s;
+}
+.log-table tr:hover td{background:rgba(0,229,160,.03)}
+.log-table tr:last-child td{border-bottom:none}
+
+/* Compliance bar in table */
+.comp-row{display:flex;align-items:center;gap:8px}
+.comp-bar-wrap{flex:1;height:5px;background:var(--border);border-radius:99px;overflow:hidden;min-width:60px}
+.comp-bar-fill{height:100%;border-radius:99px;transition:width .4s ease}
+
+/* Badges */
+.badge{display:inline-flex;align-items:center;gap:.3rem;padding:.18rem .6rem;
+  border-radius:5px;font-size:.68rem;font-weight:700;font-family:var(--mono)}
+.badge-green{background:rgba(0,229,160,.1);color:var(--accent);border:1px solid rgba(0,229,160,.15)}
+.badge-warn{background:rgba(245,158,11,.1);color:var(--warn);border:1px solid rgba(245,158,11,.15)}
+.badge-red{background:rgba(255,60,60,.1);color:var(--danger);border:1px solid rgba(255,60,60,.15)}
+
+/* Empty state */
+.empty-state{text-align:center;padding:3.5rem 1.5rem;color:var(--muted)}
+.empty-icon{font-size:2.5rem;margin-bottom:.85rem;filter:grayscale(30%)}
+.empty-state h3{font-size:.95rem;color:var(--text);margin-bottom:.4rem}
+.empty-state p{font-size:.8rem;line-height:1.8;max-width:340px;margin:0 auto}
+
+/* Divider with label */
+.section-label{display:flex;align-items:center;gap:.75rem;color:var(--muted);
+  font-family:var(--mono);font-size:.7rem;text-transform:uppercase;letter-spacing:.08em}
+.section-label::before,.section-label::after{content:'';flex:1;height:1px;background:var(--border)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">📊</div>
+    <span class="logo-text">COMPLIANCE ANALYTICS</span>
+  </div>
+  <div class="header-right">
+    <a class="back-btn" href="/">← Dashboard</a>
+    <div class="live-badge"><div class="live-dot"></div>Live · Auto-refresh 5s</div>
+  </div>
+</header>
+
+<div class="page">
+
+  <!-- Title + controls -->
+  <div class="page-title">
+    <div class="page-title-left">
+      <h1>Compliance Rate Analytics</h1>
+      <p>Each row is one detection event — logged only when face count or mask status changes.
+         Timestamps show the exact moment of each detection change.</p>
+    </div>
+    <div class="ctrl-row">
+      <button class="btn btn-green" onclick="fetchData()">↻&nbsp;Refresh</button>
+      <a class="btn btn-outline" href="/api/analytics/export">⬇&nbsp;Export CSV</a>
+      <button class="btn btn-red" onclick="clearData()">🗑&nbsp;Clear</button>
+    </div>
+  </div>
+
+  <!-- KPI Cards -->
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-glow" style="background:#00e5a0"></div>
+      <div class="kpi-label">Avg Compliance</div>
+      <div class="kpi-value c-green" id="kpi-avg">—</div>
+      <div class="kpi-sub">across all events</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-glow" style="background:#ff3c3c"></div>
+      <div class="kpi-label">Min Compliance</div>
+      <div class="kpi-value c-red" id="kpi-min">—</div>
+      <div class="kpi-sub">lowest recorded</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-glow" style="background:#5aafff"></div>
+      <div class="kpi-label">Max Compliance</div>
+      <div class="kpi-value c-blue" id="kpi-max">—</div>
+      <div class="kpi-sub">highest recorded</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-glow" style="background:#e8eaf0"></div>
+      <div class="kpi-label">Total Faces</div>
+      <div class="kpi-value c-white" id="kpi-faces">—</div>
+      <div class="kpi-sub">unique detections</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-glow" style="background:#00e5a0"></div>
+      <div class="kpi-label">With Mask</div>
+      <div class="kpi-value c-green" id="kpi-mask">—</div>
+      <div class="kpi-sub">compliant</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-glow" style="background:#ff3c3c"></div>
+      <div class="kpi-label">No Mask</div>
+      <div class="kpi-value c-red" id="kpi-nomask">—</div>
+      <div class="kpi-sub">violations</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-glow" style="background:#f59e0b"></div>
+      <div class="kpi-label">Events Logged</div>
+      <div class="kpi-value c-warn" id="kpi-readings">—</div>
+      <div class="kpi-sub">detection changes</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="chart-grid">
+
+    <!-- Time-series -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">
+          <span class="card-title-icon">📈</span>
+          Compliance Rate Over Time
+        </div>
+        <span style="font-size:.7rem;color:var(--muted);font-family:var(--mono)" id="last-refresh">No data yet</span>
+      </div>
+      <div class="card-body">
+        <div class="chart-wrap"><canvas id="timeChart"></canvas></div>
+        <div class="chart-sub" id="time-chart-sub">— no data —</div>
+      </div>
+    </div>
+
+    <!-- Hourly / per-minute -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">
+          <span class="card-title-icon">🕐</span>
+          <span id="hourly-title">Per-Minute Average</span>
+        </div>
+        <span style="font-size:.7rem;color:var(--muted);font-family:var(--mono)" id="hourly-sub-head">—</span>
+      </div>
+      <div class="card-body">
+        <div class="chart-wrap"><canvas id="hourlyChart"></canvas></div>
+        <div class="chart-sub" id="hourly-chart-sub">— no data —</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Log table -->
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title">
+        <span class="card-title-icon">📋</span>
+        Detection Event Log
+      </div>
+      <span style="font-size:.7rem;color:var(--muted);font-family:var(--mono)" id="log-count-label">0 events</span>
+    </div>
+    <div class="card-body" style="padding:.4rem .5rem">
+      <div class="log-scroll">
+        <table class="log-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Time</th>
+              <th>Mask</th>
+              <th>No Mask</th>
+              <th>Total Faces</th>
+              <th>Compliance</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="log-body">
+            <tr><td colspan="7">
+              <div class="empty-state">
+                <div class="empty-icon">📋</div>
+                <h3>No events logged yet</h3>
+                <p>Go to the dashboard, run image detection or start the webcam — events appear here automatically.</p>
+              </div>
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── Chart setup ───────────────────────────────────────────────────────────────
+let timeChart = null, hourlyChart = null;
+const G = { tick:'#606880', grid:'rgba(255,255,255,.04)', text:'#e8eaf0' };
+
+function makeGradient(ctx, color) {
+  const g = ctx.createLinearGradient(0, 0, 0, 280);
+  g.addColorStop(0, color.replace(')', ',.18)').replace('rgb','rgba'));
+  g.addColorStop(1, color.replace(')', ',0)').replace('rgb','rgba'));
+  return g;
+}
+
+function initCharts() {
+  // Time-series chart
+  const tCtx = document.getElementById('timeChart').getContext('2d');
+  timeChart = new Chart(tCtx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: 'Compliance %',
+          data: [],
+          borderColor: '#00e5a0',
+          backgroundColor: makeGradient(tCtx, 'rgb(0,229,160)'),
+          borderWidth: 2.5,
+          pointRadius: 5,
+          pointBackgroundColor: '#00e5a0',
+          pointBorderColor: '#0a0c10',
+          pointBorderWidth: 2,
+          pointHoverRadius: 7,
+          fill: true,
+          tension: 0.4,
+        },
+        {
+          label: 'Threshold (80%)',
+          data: [],
+          borderColor: 'rgba(245,158,11,.6)',
+          borderWidth: 1.5,
+          borderDash: [7, 4],
+          pointRadius: 0,
+          fill: false,
+          tension: 0,
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: G.text, font: { size: 11, family: "'Space Mono'" }, boxWidth: 12, padding: 16 } },
+        tooltip: {
+          backgroundColor: '#1a1f2e',
+          borderColor: '#232835',
+          borderWidth: 1,
+          titleColor: '#6af3ff',
+          bodyColor: '#e8eaf0',
+          padding: 10,
+          callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}%` }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: G.tick, maxTicksLimit: 8, font: { size: 10, family: "'Space Mono'" }, maxRotation: 30 },
+          grid: { color: G.grid }
+        },
+        y: {
+          min: 0, max: 100,
+          ticks: { color: G.tick, callback: v => v + '%', font: { size: 10, family: "'Space Mono'" }, stepSize: 20 },
+          grid: { color: G.grid }
+        }
+      }
+    }
+  });
+
+  // Hourly / per-minute bar chart
+  const hCtx = document.getElementById('hourlyChart').getContext('2d');
+  hourlyChart = new Chart(hCtx, {
+    type: 'bar',
+    data: {
+      labels: [],
+      datasets: [{
+        label: 'Compliance %',
+        data: [],
+        backgroundColor: ctx => {
+          const v = ctx.parsed?.y ?? 0;
+          return v >= 80 ? 'rgba(0,229,160,.65)'
+               : v >= 50 ? 'rgba(245,158,11,.65)'
+               :           'rgba(255,60,60,.65)';
+        },
+        borderColor: ctx => {
+          const v = ctx.parsed?.y ?? 0;
+          return v >= 80 ? '#00e5a0' : v >= 50 ? '#f59e0b' : '#ff3c3c';
+        },
+        borderWidth: 1,
+        borderRadius: 6,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1a1f2e',
+          borderColor: '#232835',
+          borderWidth: 1,
+          titleColor: '#6af3ff',
+          bodyColor: '#e8eaf0',
+          padding: 10,
+          callbacks: { label: ctx => ` Compliance: ${ctx.parsed.y}%` }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: G.tick, font: { size: 10, family: "'Space Mono'" }, maxRotation: 35 },
+          grid: { color: G.grid }
+        },
+        y: {
+          min: 0, max: 100,
+          ticks: { color: G.tick, callback: v => v + '%', font: { size: 10, family: "'Space Mono'" }, stepSize: 20 },
+          grid: { color: G.grid }
+        }
+      }
+    }
+  });
+}
+
+// ── Fetch & render ────────────────────────────────────────────────────────────
+async function fetchData() {
+  try {
+    const res  = await fetch('/api/analytics/data');
+    const data = await res.json();
+    renderKPIs(data.summary);
+    renderTimeChart(data.log);
+    renderHourlyChart(data.hourly);
+    renderLog(data.log);
+    document.getElementById('last-refresh').textContent =
+      new Date().toLocaleTimeString('en-US', { hour12: true });
+  } catch(e) { console.error('Analytics error:', e); }
+}
+
+function renderKPIs(s) {
+  const ids = ['kpi-avg','kpi-min','kpi-max','kpi-faces','kpi-mask','kpi-nomask','kpi-readings'];
+  if (!s || !s.total_readings) { ids.forEach(id => document.getElementById(id).textContent = '—'); return; }
+  document.getElementById('kpi-avg').textContent      = s.avg_compliance + '%';
+  document.getElementById('kpi-min').textContent      = s.min_compliance + '%';
+  document.getElementById('kpi-max').textContent      = s.max_compliance + '%';
+  document.getElementById('kpi-faces').textContent    = s.total_faces;
+  document.getElementById('kpi-mask').textContent     = s.total_mask;
+  document.getElementById('kpi-nomask').textContent   = s.total_no_mask;
+  document.getElementById('kpi-readings').textContent = s.total_readings;
+}
+
+function renderTimeChart(log) {
+  const sub = document.getElementById('time-chart-sub');
+  if (!log || !log.length) { sub.textContent = '— run detection to populate —'; return; }
+  timeChart.data.labels           = log.map(e => e.time_label);
+  timeChart.data.datasets[0].data = log.map(e => e.compliance);
+  timeChart.data.datasets[1].data = log.map(() => 80);
+  timeChart.update('active');
+  sub.textContent = `${log.length} data point${log.length !== 1 ? 's' : ''} · 80% threshold line shown`;
+}
+
+function renderHourlyChart(hourly) {
+  const sub  = document.getElementById('hourly-chart-sub');
+  const head = document.getElementById('hourly-title');
+  const subh = document.getElementById('hourly-sub-head');
+
+  if (!hourly || !hourly.length) {
+    sub.textContent  = '— no data yet —';
+    subh.textContent = '—';
+    return;
+  }
+
+  const isMinute = hourly[0]?.type === 'minute';
+  head.textContent = isMinute ? 'Per-Minute Average' : 'Hourly Average';
+  subh.textContent = `${hourly.length} bucket${hourly.length !== 1 ? 's' : ''}`;
+  sub.textContent  = isMinute
+    ? 'Showing per-minute buckets (all data within same hour)'
+    : 'Showing hourly buckets';
+
+  hourlyChart.data.labels           = hourly.map(h => h.hour);
+  hourlyChart.data.datasets[0].data = hourly.map(h => h.compliance);
+  hourlyChart.update('active');
+}
+
+function renderLog(log) {
+  const tbody = document.getElementById('log-body');
+  const countEl = document.getElementById('log-count-label');
+  countEl.textContent = log.length + ' events';
+
+  if (!log || !log.length) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">
+      <div class="empty-icon">📋</div>
+      <h3>No events logged yet</h3>
+      <p>Go to the dashboard, run image detection or start the webcam — events appear here automatically.</p>
+    </div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = [...log].reverse().map((e, i) => {
+    const pct   = e.compliance;
+    const idx   = log.length - i;
+    const color = pct >= 80 ? '#00e5a0' : pct >= 50 ? '#f59e0b' : '#ff3c3c';
+    const badge = pct >= 80
+      ? '<span class="badge badge-green">✓ Compliant</span>'
+      : pct >= 50
+        ? '<span class="badge badge-warn">⚠ Moderate</span>'
+        : '<span class="badge badge-red">✗ Critical</span>';
+    return `<tr>
+      <td style="color:var(--muted)">#${idx}</td>
+      <td style="color:var(--title)">${e.time_label}</td>
+      <td style="color:#00e5a0;font-weight:700">${e.mask}</td>
+      <td style="color:#ff3c3c;font-weight:700">${e.no_mask}</td>
+      <td>${e.total}</td>
+      <td>
+        <div class="comp-row">
+          <span style="color:${color};font-weight:700;min-width:42px">${pct}%</span>
+          <div class="comp-bar-wrap">
+            <div class="comp-bar-fill" style="width:${pct}%;background:${color}"></div>
+          </div>
+        </div>
+      </td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function clearData() {
+  if (!confirm('Clear all analytics data? This cannot be undone.')) return;
+  await fetch('/api/analytics/reset', { method: 'POST' });
+  fetchData();
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+initCharts();
+fetchData();
+setInterval(fetchData, 5000);
+</script>
+</body>
+</html>
